@@ -3,13 +3,11 @@
  * プロンプトファイルを結合して .clinerules を生成するスクリプト
  */
 
-import path from "node:path";
-import fs from "node:fs";
-import yaml from "npm:js-yaml";
+import * as path from "https://deno.land/std/path/mod.ts";
 
-const dirname = new URL(".", import.meta.url).pathname;
-const RULES_DIR = path.join(dirname, "./rules");
-const ROO_MODES_DIR = path.join(dirname, "./roomodes");
+const dirname = path.dirname(path.fromFileUrl(import.meta.url));
+const RULES_DIR = path.join(dirname, "rules");
+const ROO_MODES_DIR = path.join(dirname, "roomodes");
 const OUTPUT_FILE = path.join(Deno.cwd(), ".clinerules");
 
 function parseFrontMatter(content: string) {
@@ -36,10 +34,17 @@ async function main() {
     customModes: [],
   };
 
-  if (fs.existsSync(ROO_MODES_DIR)) {
-    const modeFiles = fs.readdirSync(ROO_MODES_DIR);
+  try {
+    Deno.statSync(ROO_MODES_DIR);
+    const modeFiles = [];
+    for await (const entry of Deno.readDir(ROO_MODES_DIR)) {
+      if (entry.isFile && entry.name.endsWith(".md")) {
+        modeFiles.push(entry.name);
+      }
+    }
+    
     for (const file of modeFiles) {
-      const content = fs.readFileSync(path.join(ROO_MODES_DIR, file), "utf-8");
+      const content = await Deno.readTextFile(path.join(ROO_MODES_DIR, file));
       const slug = file.replace(".md", "");
       const [frontMatter, body] = parseFrontMatter(content);
       const results = {
@@ -51,6 +56,8 @@ async function main() {
       // console.log(results);
       roomodes.customModes.push(results);
     }
+  } catch (_error) {
+    // ディレクトリが存在しない場合は何もしない
   }
   // console.log(roomodes);
   // throw new Error("Not implemented");
@@ -82,7 +89,7 @@ async function main() {
     let result = contents.join("\n\n");
     if (roomodes.customModes.length > 0) {
       // result = `${modeOutput}${result}`;
-      result += `このプロジェクトには以下のモードが定義されています:`;
+      result += `\nこのプロジェクトには以下のモードが定義されています：`;
       // console.log(roomodes.customModes);
       for (const mode of roomodes.customModes) {
         // const def = roomodes.customModes.find((m) => m.name === mode)!;
